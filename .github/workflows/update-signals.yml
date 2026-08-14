@@ -21,23 +21,25 @@ jobs:
           set -e
           BASE_ID="appS9LqqKU0QL3F8h"
           TABLE_ID="tblRi4qRq6gK2KVaq"
-          all_records="[]"
+          mkdir -p /tmp/pages
           offset=""
-          for i in $(seq 1 5); do
+          page=0
+          for i in $(seq 1 10); do
             url="https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?pageSize=100&sort%5B0%5D%5Bfield%5D=triaged_at&sort%5B0%5D%5Bdirection%5D=desc"
             if [ -n "$offset" ]; then
               url="${url}&offset=${offset}"
             fi
-            resp=$(curl -sf "$url" -H "Authorization: Bearer ${AIRTABLE_TOKEN}")
-            page_records=$(echo "$resp" | jq '.records')
-            all_records=$(jq -s '.[0] + .[1]' <(echo "$all_records") <(echo "$page_records"))
-            offset=$(echo "$resp" | jq -r '.offset // empty')
+            curl -sf "$url" -H "Authorization: Bearer ${AIRTABLE_TOKEN}" -o "/tmp/pages/resp_${page}.json"
+            jq '.records' "/tmp/pages/resp_${page}.json" > "/tmp/pages/records_${page}.json"
+            offset=$(jq -r '.offset // empty' "/tmp/pages/resp_${page}.json")
+            page=$((page+1))
             if [ -z "$offset" ]; then
               break
             fi
           done
-          jq -n --argjson records "$all_records" --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{generated_at: $generated_at, records: $records}' > dashboard/data.json
+          jq -s 'add' /tmp/pages/records_*.json > /tmp/pages/all_records.json
+          jq -n --slurpfile records /tmp/pages/all_records.json --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{generated_at: $generated_at, records: $records[0]}' > dashboard/data.json
 
       - name: Commit and push if changed
         run: |
