@@ -1,0 +1,52 @@
+name: Update SIGNALDESK signals data
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch signals from Airtable
+        env:
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+        run: |
+          set -e
+          BASE_ID="appS9LqqKU0QL3F8h"
+          TABLE_ID="tblRi4qRq6gK2KVaq"
+          all_records="[]"
+          offset=""
+          for i in $(seq 1 5); do
+            url="https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?pageSize=100&sort%5B0%5D%5Bfield%5D=triaged_at&sort%5B0%5D%5Bdirection%5D=desc"
+            if [ -n "$offset" ]; then
+              url="${url}&offset=${offset}"
+            fi
+            resp=$(curl -sf "$url" -H "Authorization: Bearer ${AIRTABLE_TOKEN}")
+            page_records=$(echo "$resp" | jq '.records')
+            all_records=$(jq -s '.[0] + .[1]' <(echo "$all_records") <(echo "$page_records"))
+            offset=$(echo "$resp" | jq -r '.offset // empty')
+            if [ -z "$offset" ]; then
+              break
+            fi
+          done
+          jq -n --argjson records "$all_records" --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{generated_at: $generated_at, records: $records}' > dashboard/data.json
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "signaldesk-bot"
+          git config user.email "actions@github.com"
+          git add dashboard/data.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update signals data [skip ci]"
+            git push
+          else
+            echo "No changes"
+          fi

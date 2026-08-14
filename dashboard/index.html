@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SIGNALDESK — Live Feed</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+:root{
+  --bg:#070C14;--bg-raised:#0D1420;--bg-code:#060A10;
+  --border:#18253A;--border-dim:#111D2E;
+  --text:#DCE5F2;--text-2:#566A82;--text-3:#3A4E63;
+  --accent:#E8A020;--accent-dim:rgba(232,160,32,.1);
+  --green:#22C55E;--green-dim:rgba(34,197,94,.1);
+  --red:#EF4444;--blue:#60A5FA;--orange:#F97316;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:'SF Mono','Cascadia Code',Consolas,'Courier New',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:14px;}
+header{position:sticky;top:0;z-index:10;height:56px;background:var(--bg-raised);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:14px;}
+.wordmark{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.1em;}
+.live-pill{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--green);background:var(--green-dim);border:1px solid var(--green);padding:2px 8px;}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 1.8s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-spacer{flex:1;}
+.hdr-meta{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
+.hdr-meta span{color:var(--accent);}
+.refresh-btn{font-family:var(--font-mono);font-size:11px;background:var(--bg-code);border:1px solid var(--border);color:var(--text-2);padding:6px 12px;cursor:pointer;}
+.refresh-btn:hover{color:var(--text);border-color:var(--text-2);}
+.refresh-btn:disabled{opacity:.5;cursor:default;}
+
+.layout{display:flex;max-width:1400px;margin:0 auto;}
+.filters{width:220px;min-width:220px;padding:20px 16px;border-right:1px solid var(--border-dim);}
+.filter-group{margin-bottom:22px;}
+.filter-label{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin-bottom:9px;display:block;}
+.sig-slider{width:100%;accent-color:var(--accent);}
+.sig-slider-labels{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;color:var(--text-3);margin-top:4px;}
+.tier-btns{display:flex;gap:4px;}
+.tier-btn{flex:1;padding:5px 0;font-family:var(--font-mono);font-size:10px;text-align:center;border:1px solid var(--border);color:var(--text-3);cursor:pointer;}
+.tier-btn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+.source-toggle{display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:12px;color:var(--text-2);}
+.source-toggle input{accent-color:var(--accent);}
+.src-count{margin-left:auto;color:var(--text-3);font-family:var(--font-mono);font-size:10px;}
+
+.feed{flex:1;padding:20px;display:flex;flex-direction:column;gap:8px;min-width:0;}
+.status-msg{font-family:var(--font-mono);font-size:12px;color:var(--text-3);padding:40px;text-align:center;}
+.status-msg.error{color:var(--red);}
+.card{background:var(--bg-raised);border:1px solid var(--border-dim);border-left:3px solid transparent;padding:13px 15px;display:flex;flex-direction:column;gap:6px;}
+.card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.sig-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:1px 7px;border:1px solid currentColor;flex-shrink:0;}
+.card-source{font-family:var(--font-mono);font-size:10px;color:var(--text-3);}
+.card-time{font-family:var(--font-mono);font-size:10px;color:var(--text-3);margin-left:auto;}
+.card-title{font-size:13px;font-weight:500;line-height:1.4;}
+.card-title a{color:var(--text);text-decoration:none;}
+.card-title a:hover{color:var(--accent);}
+.card-oneliner{font-size:12px;color:var(--text-2);line-height:1.5;}
+.card-toggle{font-family:var(--font-mono);font-size:10px;color:var(--text-3);cursor:pointer;margin-top:2px;}
+.card-toggle:hover{color:var(--accent);}
+.card-article{font-size:11.5px;color:var(--text-2);line-height:1.6;background:var(--bg-code);border:1px solid var(--border-dim);padding:10px;margin-top:4px;display:none;max-height:260px;overflow-y:auto;}
+.card-article.open{display:block;}
+footer{max-width:1400px;margin:0 auto;padding:24px 20px 60px;font-family:var(--font-mono);font-size:10px;color:var(--text-3);text-align:center;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-thumb{background:var(--border);}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="wordmark">SIGNALDESK</span>
+  <div class="live-pill"><span class="live-dot"></span>LIVE</div>
+  <div class="hdr-spacer"></div>
+  <span class="hdr-meta" id="hdr-meta">loading…</span>
+  <button class="refresh-btn" id="refresh-btn">↻ Refresh</button>
+</header>
+
+<div class="layout">
+  <aside class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Significance ≥</span>
+      <input type="range" min="0" max="100" value="0" class="sig-slider" id="sig-min">
+      <div class="sig-slider-labels"><span id="sig-min-val">0</span><span>100</span></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Tier</span>
+      <div class="tier-btns">
+        <div class="tier-btn on" data-tier="all">All</div>
+        <div class="tier-btn" data-tier="escalated">Escalated</div>
+        <div class="tier-btn" data-tier="logged">Logged</div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Sources</span>
+      <div id="source-toggles"></div>
+    </div>
+  </aside>
+  <main class="feed" id="feed">
+    <div class="status-msg">Loading signals…</div>
+  </main>
+</div>
+
+<footer>SIGNALDESK — signals feed, refreshed every 15 min by GitHub Actions.</footer>
+
+<script>
+let allRecords = [];
+let generatedAt = null;
+let sourcesFound = new Set();
+
+function sigColor(s){
+  if (s >= 90) return '#EF4444';
+  if (s >= 70) return '#F97316';
+  if (s >= 50) return '#E8A020';
+  if (s >= 30) return '#60A5FA';
+  return '#566A82';
+}
+function sigLabel(s){
+  if (s >= 90) return 'CRITICAL';
+  if (s >= 70) return 'HIGH';
+  if (s >= 50) return 'MED';
+  if (s >= 30) return 'LOW';
+  return 'MIN';
+}
+function timeAgo(iso){
+  if (!iso) return '';
+  const d = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (d < 0) return 'just now';
+  if (d < 60) return Math.round(d) + 's ago';
+  if (d < 3600) return Math.round(d/60) + 'm ago';
+  if (d < 86400) return Math.round(d/3600) + 'h ago';
+  return Math.round(d/86400) + 'd ago';
+}
+function esc(s){
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+async function fetchAll(){
+  const res = await fetch(`./data.json?t=${Date.now()}`);
+  if (!res.ok) throw new Error(`data.json ${res.status}: ${res.statusText}`);
+  const data = await res.json();
+  generatedAt = data.generated_at || null;
+  return data.records || [];
+}
+
+function buildSourceToggles(){
+  const wrap = document.getElementById('source-toggles');
+  wrap.innerHTML = '';
+  [...sourcesFound].sort().forEach(src => {
+    const count = allRecords.filter(r => (r.fields.source_name || 'Unknown') === src).length;
+    const label = document.createElement('label');
+    label.className = 'source-toggle';
+    label.innerHTML = `<input type="checkbox" checked data-src="${esc(src)}"><span>${esc(src)}</span><span class="src-count">${count}</span>`;
+    wrap.appendChild(label);
+    label.querySelector('input').addEventListener('change', renderFeed);
+  });
+}
+
+function renderFeed(){
+  const feed = document.getElementById('feed');
+  const minSig = parseInt(document.getElementById('sig-min').value, 10);
+  const tierEl = document.querySelector('.tier-btn.on');
+  const tier = tierEl ? tierEl.dataset.tier : 'all';
+  const enabledSrc = new Set([...document.querySelectorAll('input[data-src]:checked')].map(e => e.dataset.src));
+
+  const visible = allRecords.filter(r => {
+    const f = r.fields;
+    const sig = typeof f.significance === 'number' ? f.significance : 0;
+    if (sig < minSig) return false;
+    if (tier === 'escalated' && f.tier !== 'escalated') return false;
+    if (tier === 'logged' && f.tier !== 'logged') return false;
+    if (!enabledSrc.has(f.source_name || 'Unknown')) return false;
+    return true;
+  });
+
+  if (visible.length === 0){
+    feed.innerHTML = '<div class="status-msg">No signals match these filters.</div>';
+    return;
+  }
+
+  feed.innerHTML = '';
+  visible.forEach(r => {
+    const f = r.fields;
+    const sig = typeof f.significance === 'number' ? f.significance : 0;
+    const col = sigColor(sig);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.borderLeftColor = col;
+    const ts = f.triaged_at || f.fetched_at || r.createdTime;
+    const hasArticle = f.article_text && f.article_text.length > 0;
+    card.innerHTML = `
+      <div class="card-top">
+        <span class="sig-badge" style="color:${col};border-color:${col}">${sigLabel(sig)} ${sig}</span>
+        <span class="card-source">${esc(f.source_name || 'Unknown')}</span>
+        <span class="card-time">${timeAgo(ts)}</span>
+      </div>
+      <div class="card-title"><a href="${esc(f.link || '#')}" target="_blank" rel="noopener">${esc(f.title || '(no title)')}</a></div>
+      <div class="card-oneliner">${esc(f.one_line || '')}</div>
+      ${hasArticle ? `<div class="card-toggle" data-toggle>▸ Show analyzed article text</div><div class="card-article">${esc(f.article_text)}</div>` : ''}
+    `;
+    if (hasArticle){
+      const toggle = card.querySelector('[data-toggle]');
+      const article = card.querySelector('.card-article');
+      toggle.addEventListener('click', () => {
+        article.classList.toggle('open');
+        toggle.textContent = (article.classList.contains('open') ? '▾ Hide' : '▸ Show') + ' analyzed article text';
+      });
+    }
+    feed.appendChild(card);
+  });
+}
+
+async function load(){
+  const btn = document.getElementById('refresh-btn');
+  const meta = document.getElementById('hdr-meta');
+  btn.disabled = true;
+  btn.textContent = '↻ Loading…';
+  try {
+    allRecords = await fetchAll();
+    sourcesFound = new Set(allRecords.map(r => r.fields.source_name || 'Unknown'));
+    buildSourceToggles();
+    renderFeed();
+    const genLabel = generatedAt ? new Date(generatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
+    meta.innerHTML = `<span>${allRecords.length}</span> signals · data generated ${genLabel}`;
+  } catch (err) {
+    document.getElementById('feed').innerHTML = `<div class="status-msg error">Failed to load: ${esc(err.message)}</div>`;
+    meta.textContent = 'error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Refresh';
+  }
+}
+
+document.getElementById('sig-min').addEventListener('input', e => {
+  document.getElementById('sig-min-val').textContent = e.target.value;
+  renderFeed();
+});
+document.querySelectorAll('.tier-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tier-btn').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    renderFeed();
+  });
+});
+document.getElementById('refresh-btn').addEventListener('click', load);
+
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
